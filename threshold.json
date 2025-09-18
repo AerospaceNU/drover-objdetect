@@ -2,7 +2,7 @@
   "low_H": 0,
   "low_S": 0,
   "low_V": 0,
-  "high_H": 0,
-  "high_S": 0,
-  "high_V": 0
+  "high_H": 180,
+  "high_S": 255,
+  "high_V": 255
 }

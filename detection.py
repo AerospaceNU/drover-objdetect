@@ -107,6 +107,10 @@ class Detection:
                 fgmask[y : y + height, x : x + width], filtered
             )
 
+            frame_copy = cv.rectangle(
+                frame_copy, (x, y), (x + width, y + height), (0, 255, 0), 2
+            )
+            
             fgmask_copy = cv.rectangle(
                 fgmask_copy, (x, y), (x + width, y + height), (0, 255, 0), 2
             )

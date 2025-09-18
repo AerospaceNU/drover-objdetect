@@ -4,6 +4,8 @@ from detection import Detection
 from videoFeed import VideoFeed
 from typing import Union
 from enum import Enum
+import os
+from datetime import datetime
 
 
 class VideoFeedOptions(Enum):
@@ -53,6 +55,67 @@ class Display:
                 lambda x, n=name: self.update_param(n, x),
             )
 
+        self._init_video_writers()
+
+    def _init_video_writers(self):
+        """Initialize video writers for each frame type"""
+        output_dir = "output_videos"
+        os.makedirs(output_dir, exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        ret, sample_frame = self.video.feed.read()
+        if not ret:
+            raise RuntimeError("Could not read sample frame to determine video properties")
+        
+        self.video.feed.set(cv.CAP_PROP_POS_FRAMES, 0)
+        
+        height, width = sample_frame.shape[:2]
+        fps = self.video.feed.get(cv.CAP_PROP_FPS) or 30.0
+        
+        fourcc = cv.VideoWriter_fourcc(*'XVID')
+        
+        self.video_writers = {
+            'raw': cv.VideoWriter(
+                os.path.join(output_dir, f"raw_{timestamp}.avi"),
+                fourcc, fps, (width, height)
+            ),
+            'annotated': cv.VideoWriter(
+                os.path.join(output_dir, f"annotated_{timestamp}.avi"),
+                fourcc, fps, (width, height)
+            ),
+            'fgmask': cv.VideoWriter(
+                os.path.join(output_dir, f"fgmask_{timestamp}.avi"),
+                fourcc, fps, (width, height)
+            )
+        }
+        
+        for name, writer in self.video_writers.items():
+            if not writer.isOpened():
+                print(f"Warning: Could not initialize video writer for {name}")
+
+    def _write_frames(self, frame_raw, frame_annotated, fgmask):
+        """Write frames to their corresponding video files"""
+        if not self.stop_reading:
+            if self.video_writers['raw'].isOpened():
+                self.video_writers['raw'].write(frame_raw)
+            
+            if self.video_writers['annotated'].isOpened():
+                self.video_writers['annotated'].write(frame_annotated)
+            
+            if self.video_writers['fgmask'].isOpened():
+                fgmask_color = cv.cvtColor(fgmask, cv.COLOR_GRAY2BGR)
+                self.video_writers['fgmask'].write(fgmask_color)
+
+    def _release_video_writers(self):
+        """Release all video writers and save the video files"""
+        print("Saving video files...")
+        for name, writer in self.video_writers.items():
+            if writer.isOpened():
+                writer.release()
+                print(f"Saved {name} video")
+        print("All video files saved successfully!")
+
     def update_param(self, name, val):
         """Update GUI param + Detection object"""
         self.params[name] = val
@@ -69,6 +132,8 @@ class Display:
 
         frame_annotated, fgmask = self.detection.detect(frame_raw)
 
+        self._write_frames(frame_raw, frame_annotated, fgmask)
+
         if self.feed_option == VideoFeedOptions.RAW:
             cv.imshow(self.windowName, frame_raw)
         elif self.feed_option == VideoFeedOptions.RAW_ANNOTATED:
@@ -82,6 +147,7 @@ class Display:
         if key == ord("q") or key == 27:
             self.detection.save_threshold()
             self.video.release()
+            self._release_video_writers()
             return False
         elif key in (ord("p"), ord(" ")):
             self.stop_reading = not self.stop_reading
