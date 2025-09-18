@@ -7,7 +7,7 @@ import json
 
 class Detection:
     def __init__(
-        self, weights: str = "threshold.json", kernel: Tuple[int, int] = (3, 3)
+        self, weights: str = "threshold.json", kernel: Tuple[int, int] = (7, 7)
     ):
         self.low_H = 0
         self.low_S = 0
@@ -112,7 +112,7 @@ class Detection:
             )
             
             fgmask_copy = cv.rectangle(
-                fgmask_copy, (x, y), (x + width, y + height), (0, 255, 0), 2
+                fgmask_copy, (x, y), (x + width, y + height), 255, 2
             )
 
         return frame_copy, fgmask_copy
