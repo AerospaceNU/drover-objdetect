@@ -6,9 +6,21 @@ import json
 
 
 class Detection:
+    """
+    The Detection class handles the object detection logic, including
+    color filtering and background subtraction.
+    """
+
     def __init__(
         self, weights: str = "threshold.json", kernel: Tuple[int, int] = (7, 7)
     ):
+        """
+        Initializes the Detection object.
+
+        Args:
+            weights (str): Path to the JSON file for loading/saving threshold values.
+            kernel (Tuple[int, int]): Kernel size for Gaussian blur.
+        """
         self.low_H = 0
         self.low_S = 0
         self.low_V = 0
@@ -26,6 +38,9 @@ class Detection:
         self.fgbg = cv.createBackgroundSubtractorMOG2()
 
     def save_threshold(self):
+        """
+        Saves the current HSV threshold values to a JSON file. Uses the same weight path in params to save json.
+        """
         dir_name = os.path.dirname(self.weights)
         if dir_name:
             os.makedirs(dir_name, exist_ok=True)
@@ -45,8 +60,11 @@ class Detection:
         return self.weights
 
     def load_threshold(self):
+        """
+        Loads HSV threshold values from a JSON file. Uses the weight path in params to load values from.
+        """
         if not os.path.exists(self.weights):
-            self.save_threshold(self.weights)
+            self.save_threshold()
 
         with open(self.weights, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -59,6 +77,16 @@ class Detection:
         self.high_V = data["high_V"]
 
     def filter_hsv(self, frame, avg=None):
+        """
+        Filters the frame based on HSV color space.
+
+        Args:
+            frame: The input frame.
+            avg: The average HSV values to use for filtering.
+
+        Returns:
+            A tuple containing the filtered frame and the average HSV values.
+        """
         frame_HSV = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
         if avg is None:
             avg = cv.mean(frame_HSV)
@@ -77,6 +105,15 @@ class Detection:
         return cv.bitwise_and(color_filter, value_filter), avg
 
     def detect(self, frame: np.ndarray):
+        """
+        Performs object detection on a given frame.
+
+        Args:
+            frame (np.ndarray): The input video frame.
+
+        Returns:
+            A tuple containing the annotated frame and the foreground mask.
+        """
         frame_blurred = cv.GaussianBlur(frame, self.kernel, 0)
         fgmask = self.fgbg.apply(frame_blurred)
         frame_copy = frame.copy()
@@ -110,7 +147,7 @@ class Detection:
             frame_copy = cv.rectangle(
                 frame_copy, (x, y), (x + width, y + height), (0, 255, 0), 2
             )
-            
+
             fgmask_copy = cv.rectangle(
                 fgmask_copy, (x, y), (x + width, y + height), 255, 2
             )
@@ -118,6 +155,16 @@ class Detection:
         return frame_copy, fgmask_copy
 
     def set_attr(self, name: str, val: float):
+        """
+        Sets an attribute of the Detection class.
+
+        Args:
+            name (str): The name of the attribute to set.
+            val (float): The value to set.
+
+        Returns:
+            The new value of the attribute if needed.
+        """
         val = min(self.max_val, max(0, val))
         setattr(self, name, val)
         return getattr(self, name)
