@@ -40,6 +40,7 @@ class Display:
 
         self.detection = Detection(**kwargs)
         self.video = VideoFeed(source)
+        self.frame_idx = 0
 
         self.params = {
             "low_H": self.detection.low_H,
@@ -155,9 +156,11 @@ class Display:
         if frame_raw is None:
             return
 
-        frame_annotated, fgmask = self.detection.detect(frame_raw)
+        frame_annotated, fgmask = self.detection.detect(frame_raw, self.frame_idx)
 
         self._write_frames(frame_raw, frame_annotated, fgmask)
+
+        self.frame_idx += 1
 
         if self.feed_option == VideoFeedOptions.RAW:
             cv.imshow(self.windowName, frame_raw)

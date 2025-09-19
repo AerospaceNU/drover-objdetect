@@ -33,6 +33,7 @@ class VideoFeed:
         self.last_frame = None
         self.is_pausing = False
         self.stop_reading = False
+        self.frame_idx = 0
 
     def read(self):
         """
@@ -45,6 +46,7 @@ class VideoFeed:
             ret, frame = self.feed.read()
             if ret:
                 self.last_frame = frame
+                self.frame_idx += 1
             else:
                 return None
         return self.last_frame
