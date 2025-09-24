@@ -76,7 +76,7 @@ cv.createTrackbar(high_V_name, window_detection_name, high_V, max_value, on_high
 # dont really filter saturation
 # filter for higher than average value
 
-def filter_hsv(frame, avg = None):
+def filter_hsv(frame, avg=None):
 	frame_HSV = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
 	if avg is None:
 		avg = cv.mean(frame_HSV)
@@ -117,10 +117,10 @@ while True:
 			continue
 		print(width, height)
 		filtered, _ = filter_hsv(frame_blurred[y:y + height, x:x + width], mean)
-		if np.count_nonzero(filtered)/(np.multiply.reduce(filtered.shape)/255) < 0.2:
+		if np.count_nonzero(filtered) / (np.multiply.reduce(filtered.shape) / 255) < 0.2:
 			fgmask_copy[y:y + height, x:x + width] = 0
 			continue
-		fgmask_copy[y:y+height, x:x+width] = cv.bitwise_and(fgmask[y:y+height, x:x+width], filtered)
+		fgmask_copy[y:y + height, x:x + width] = cv.bitwise_and(fgmask[y:y + height, x:x + width], filtered)
 		fgmask_copy = cv.rectangle(fgmask_copy, (x, y), (x + width, y + height), (0, 255, 0), 2)
 
 	# cv.drawContours(frame_copy, contours, -1, (0, 255, 0), 3)
