@@ -130,7 +130,6 @@ cv.createTrackbar(
 # dont really filter saturation
 # filter for higher than average value
 
-
 def filter_hsv(frame, avg=None):
     frame_HSV = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
     if avg is None:
@@ -146,7 +145,6 @@ def filter_hsv(frame, avg=None):
         frame_HSV, (0, 0, max(avg[2] - low_V, 0)), (180, 255, min(avg[2] + high_V, 255))
     )
     return cv.bitwise_and(color_filter, value_filter), avg
-
 
 fgbg = cv.bgsegm.createBackgroundSubtractorMOG()
 
