@@ -1,10 +1,11 @@
+import pathlib
+
 import cv2 as cv
 import numpy as np
 from detection import Detection
 from videoFeed import VideoFeed
 from typing import Union
 from enum import Enum
-import os
 from datetime import datetime
 
 
@@ -77,8 +78,8 @@ class Display:
         Defaults output directory to output_videos
         """
 
-        output_dir = "output_videos"
-        os.makedirs(output_dir, exist_ok=True)
+        output_dir = pathlib.Path("output_videos")
+        output_dir.mkdir(exist_ok=True)
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
@@ -97,19 +98,19 @@ class Display:
 
         self.video_writers = {
             "raw": cv.VideoWriter(
-                os.path.join(output_dir, f"raw_{timestamp}.mp4"),
+				str(output_dir / f"raw_{timestamp}.mp4"),
                 fourcc,
                 fps,
                 (width, height),
             ),
             "annotated": cv.VideoWriter(
-                os.path.join(output_dir, f"annotated_{timestamp}.mp4"),
+                str(output_dir / f"annotated_{timestamp}.mp4"),
                 fourcc,
                 fps,
                 (width, height),
             ),
             "fgmask": cv.VideoWriter(
-                os.path.join(output_dir, f"fgmask_{timestamp}.mp4"),
+                str(output_dir / f"fgmask_{timestamp}.mp4"),
                 fourcc,
                 fps,
                 (width, height),

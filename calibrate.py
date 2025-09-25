@@ -1,7 +1,8 @@
+import pathlib
+
 import cv2 as cv
 import numpy as np
 import json
-import os
 
 max_value = 255
 max_value_H = 360 // 2
@@ -24,9 +25,7 @@ DEFAULT_PATH = "threshold.json"
 
 
 def save_threshold(path: str = DEFAULT_PATH):
-    dir_name = os.path.dirname(path)
-    if dir_name:
-        os.makedirs(dir_name, exist_ok=True)
+    pathlib.Path(path).mkdir(exist_ok=True)
 
     data = {
         "low_H": low_H,
@@ -46,7 +45,7 @@ def save_threshold(path: str = DEFAULT_PATH):
 def load_threshold(path: str = DEFAULT_PATH):
     global low_H, low_S, low_V, high_H, high_S, high_V
 
-    if not os.path.exists(path):
+    if not pathlib.Path(path).exists():
         save_threshold(path)
 
     with open(path, "r", encoding="utf-8") as f:
