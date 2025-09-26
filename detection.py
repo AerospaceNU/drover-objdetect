@@ -45,7 +45,7 @@ class Detection:
 		Saves the current HSV threshold values to a JSON file. Uses the same weight path in params to save json.
 		"""
 
-		pathlib.Path(self.weights).mkdir(exist_ok=True)
+		pathlib.Path(self.weights).parent.mkdir(exist_ok=True)
 
 		data = {
 			"low_H": self.low_H,
@@ -106,14 +106,14 @@ class Detection:
 		)
 		return cv.bitwise_and(color_filter, value_filter), avg
 
-	def detect(self, frame: np.ndarray, frame_idx: int):
+	def detect(self, frame: np.ndarray, frame_idx: int, draw_bbox: bool):
 		"""
 		Performs object detection on a given frame using SORT tracking.
 
 		Args:
 			frame (np.ndarray): The input video frame.
 			frame_idx (int): The current frame index.
-
+			draw_bbox (bool): Whether to draw a bounding box
 		Returns:
 			A tuple containing the annotated frame and the foreground mask.
 		"""
@@ -169,8 +169,9 @@ class Detection:
 			cv.putText(frame_copy, f"ID:{track_id}", (x1, y1 - 10),
 					   cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-			cv.rectangle(fgmask_copy, (x1, y1), (x2, y2), 255, 2)
-			cv.putText(fgmask_copy, f"ID:{track_id}", (x1, y1 - 10),
+			if draw_bbox:
+				cv.rectangle(fgmask_copy, (x1, y1), (x2, y2), 255, 2)
+				cv.putText(fgmask_copy, f"ID:{track_id}", (x1, y1 - 10),
 					   cv.FONT_HERSHEY_SIMPLEX, 0.5, 255, 2)
 
 		return frame_copy, fgmask_copy

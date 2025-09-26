@@ -1,8 +1,8 @@
 {
-  "low_H": 0,
-  "low_S": 0,
-  "low_V": 0,
-  "high_H": 180,
-  "high_S": 255,
-  "high_V": 255
+  "low_H": 92,
+  "low_S": 78,
+  "low_V": 43,
+  "high_H": 120,
+  "high_S": 116,
+  "high_V": 101
 }

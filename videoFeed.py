@@ -45,15 +45,15 @@ class VideoFeed:
         if not self.stop_reading:
             ret, frame = self.feed.read()
             if ret:
-                self.last_frame = frame
+                self.last_frame = frame.copy()
                 self.frame_idx += 1
             else:
                 return None
         return self.last_frame
 
-    def toggle_pause(self):
+    def set_playback_state(self, pause: bool):
         """Toggles the pause state of the video feed."""
-        self.stop_reading = not self.stop_reading
+        self.stop_reading = pause
 
     def release(self):
         """Releases the video capture object."""
