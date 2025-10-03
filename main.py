@@ -1,6 +1,6 @@
 import argparse
 import cv2 as cv
-from gui import Display
+from droverDetection.gui import Display
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(

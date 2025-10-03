@@ -1,7 +1,7 @@
 import cv2 as cv
 import numpy as np
 from typing import Tuple
-from sort_manager import SORTTrackManager
+from droverDetection.sort_manager import SORTTrackManager
 import os
 import json
 
@@ -151,11 +151,9 @@ class Detection:
 
             x1, y1, x2, y2 = x, y, x + width, y + height
 
-            detections.append({
-                "bbox": [x1, y1, x2, y2],
-                "conf": 1.0, 
-                "frame_idx": frame_idx
-            })
+            detections.append(
+                {"bbox": [x1, y1, x2, y2], "conf": 1.0, "frame_idx": frame_idx}
+            )
 
         tracked_objects = self.sort_manager.step(detections, frame_idx)
 
@@ -166,12 +164,26 @@ class Detection:
             x1, y1, x2, y2 = int(x1), int(y1), int(x2), int(y2)
 
             cv.rectangle(frame_copy, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv.putText(frame_copy, f"ID:{track_id}", (x1, y1 - 10),
-                      cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            cv.putText(
+                frame_copy,
+                f"ID:{track_id}",
+                (x1, y1 - 10),
+                cv.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                (0, 255, 0),
+                2,
+            )
 
             cv.rectangle(fgmask_copy, (x1, y1), (x2, y2), 255, 2)
-            cv.putText(fgmask_copy, f"ID:{track_id}", (x1, y1 - 10),
-                      cv.FONT_HERSHEY_SIMPLEX, 0.5, 255, 2)
+            cv.putText(
+                fgmask_copy,
+                f"ID:{track_id}",
+                (x1, y1 - 10),
+                cv.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                255,
+                2,
+            )
 
         return frame_copy, fgmask_copy
 

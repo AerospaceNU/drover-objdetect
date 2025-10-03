@@ -1,7 +1,7 @@
 import cv2 as cv
 import numpy as np
-from detection import Detection
-from videoFeed import VideoFeed
+from droverDetection.detection import Detection
+from droverDetection.videoFeed import VideoFeed
 from typing import Union
 from enum import Enum
 import os
