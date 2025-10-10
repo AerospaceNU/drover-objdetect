@@ -1,0 +1,62 @@
+#VRML_SIM R2025a utf8
+
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackground.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/backgrounds/protos/TexturedBackgroundLight.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/floors/protos/Floor.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/SandyGround.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/factory/manhole/protos/SquareManhole.proto"
+EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/dji/mavic/protos/Mavic2Pro.proto"
+IMPORTABLE EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/tesla/TeslaModel3.proto"
+
+WorldInfo {
+  title "GeoTag World"
+  basicTimeStep 8
+  defaultDamping Damping {
+    linear 0.5
+    angular 0.5
+  }
+}
+Viewpoint {
+  orientation -0.05433036914801402 -0.0009307738517956669 0.9985225809406001 3.1758568204298765
+  position 4.078267525525974 0.4122421755503597 1.3217990529533072
+  near 0.2
+  follow "Mavic 2 PRO"
+  followType "Mounted Shot"
+  followSmoothness 0.2
+}
+TexturedBackground {
+  texture "mars"
+  luminosity 3
+}
+TexturedBackgroundLight {
+}
+Floor {
+  size 400 400
+  tileSize 6 6
+  appearance SandyGround {
+  }
+}
+SquareManhole {
+  translation 0 0 -0.03
+}
+Mavic2Pro {
+  translation 0.11749659585378709 -0.04435092974795165 0.085708727874277
+  rotation 0.034863913040904616 0.0005779710335440391 0.9993919018668104 -3.108492066735865
+  controller "mavic2pro_geotag"
+  controllerArgs [
+    ""
+  ]
+  cameraSlot [
+    Camera {
+      width 640
+      height 480
+      near 0.2
+    }
+  ]
+}
+Robot {
+  rotation 0 1 0 0
+  name "WorldSpawner"
+  controller "spawner"
+  supervisor TRUE
+}
