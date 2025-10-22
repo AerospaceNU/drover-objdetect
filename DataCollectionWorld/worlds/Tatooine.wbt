@@ -6,7 +6,7 @@ EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/project
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/appearances/protos/SandyGround.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/factory/manhole/protos/SquareManhole.proto"
 EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/robots/dji/mavic/protos/Mavic2Pro.proto"
-IMPORTABLE EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/vehicles/protos/tesla/TeslaModel3.proto"
+IMPORTABLE EXTERNPROTO "https://raw.githubusercontent.com/cyberbotics/webots/R2025a/projects/objects/rocks/protos/Rock.proto"
 
 WorldInfo {
   title "GeoTag World"
@@ -18,7 +18,7 @@ WorldInfo {
 }
 Viewpoint {
   orientation -0.05433036914801402 -0.0009307738517956669 0.9985225809406001 3.1758568204298765
-  position -0.0995602726420236 0.2688236472138733 0.8655431612707616
+  position 2.8929424021278587 0.37155175148056746 1.192351024638957
   near 0.2
   follow "Mavic 2 PRO"
   followType "Mounted Shot"
@@ -42,7 +42,7 @@ SquareManhole {
 Mavic2Pro {
   translation 0.11749659585378709 -0.04435092974795165 0.085708727874277
   rotation 0.034863913040904616 0.0005779710335440391 0.9993919018668104 -3.108492066735865
-  controller "mavic2pro_geotag"
+  controller "droneController"
   controllerArgs [
     ""
   ]
