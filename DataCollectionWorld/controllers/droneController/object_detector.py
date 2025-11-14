@@ -1,4 +1,5 @@
 """Object detection and 3D-to-2D projection module for Webots."""
+import functools
 
 import numpy as np
 import math
@@ -314,4 +315,5 @@ class ObjectDetector:
                 })
         
         return detections
+	@functools.lru_cache
 
