@@ -52,6 +52,15 @@ try:
 except Exception:
     camera_yaw_motor = None
 
+# Initialize camera motor position sensors
+camera_pitch_sensor = camera_pitch_motor.getPositionSensor()
+camera_pitch_sensor.enable(timestep)
+if camera_yaw_motor is not None:
+    camera_yaw_sensor = camera_yaw_motor.getPositionSensor()
+    camera_yaw_sensor.enable(timestep)
+else:
+    camera_yaw_sensor = None
+
 # Initialize LEDs
 front_left_led = supervisor.getDevice("front left led")
 front_right_led = supervisor.getDevice("front right led")
@@ -71,6 +80,9 @@ for m in (front_left_motor, front_right_motor, rear_left_motor, rear_right_motor
     m.setVelocity(1.0)
 
 print("Start the drone...")
+
+# Get the robot node for direct position/orientation reading
+robot_node = supervisor.getSelf()
 
 # Wait for sensors to initialize
 while supervisor.step(timestep) != -1:
@@ -191,17 +203,14 @@ print_manual_controls()
 try:
     while supervisor.step(timestep) != -1:
         now = supervisor.getTime()
-
-        # Read sensor data
+    
         roll, pitch, _yaw = imu.getRollPitchYaw()
         gx, gy, _gz = gyro.getValues()
         _x, _y, altitude = gps.getValues()
 
-        # Get camera frame
         frame_bgr = camera_frame_bgr()
         
         if frame_bgr is not None:
-            # Initialize video writers on first frame
             if raw_video_writer is None:
                 raw_video_writer = cv2.VideoWriter(
                     raw_video_path, fourcc, fps, (cam_width, cam_height))
@@ -211,12 +220,15 @@ try:
                 print(f"  Raw: {raw_video_path}")
                 print(f"  Labeled: {labeled_video_path}")
             
-            # Write raw frame
             raw_video_writer.write(frame_bgr)
             
-            # Detect red spheres
-            detections = detector.detect_visible_spheres(
-                imu, gps, cam_pitch_offset, cam_yaw_offset, filter_color="red"
+            actual_pitch = camera_pitch_sensor.getValue()
+            actual_yaw = camera_yaw_sensor.getValue() if camera_yaw_sensor is not None else 0.0
+            
+            actual_pitch_offset = actual_pitch + 0.1 * gy
+            
+            detections = detector.detect_visible_spheres_from_node(
+                robot_node, actual_pitch_offset, actual_yaw, filter_color="red"
             )
             
             # Log detections to database

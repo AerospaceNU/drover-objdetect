@@ -6,7 +6,7 @@ supervisor = Supervisor()
 timestep = int(supervisor.getBasicTimeStep())
 
 N_ROCKS = 0
-N_SPHERES = 100
+N_SPHERES = 30
 Z_FIXED = 0.02
 
 XMIN, XMAX = -180.0, 180.0

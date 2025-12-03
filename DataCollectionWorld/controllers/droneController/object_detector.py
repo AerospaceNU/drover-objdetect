@@ -105,6 +105,52 @@ class ObjectDetector:
 
 		return R, t
 
+	def get_camera_transform_from_node(self, robot_node, cam_pitch_offset=0.0, cam_yaw_offset=0.0):
+		"""
+		Get the camera transformation matrix directly from robot node.
+		This avoids sensor lag by using actual scene graph transforms.
+
+		Args:
+			robot_node: Webots robot node
+			cam_pitch_offset: Camera pitch offset
+			cam_yaw_offset: Camera yaw offset
+
+		Returns:
+			Tuple of (R, t) where R is rotation matrix and t is translation vector
+		"""
+		# Get actual robot position from scene graph
+		pos = np.array(robot_node.getPosition())
+		
+		# Get actual robot orientation as rotation matrix
+		# Webots gives a 3x3 rotation matrix as a flat list of 9 values
+		orientation_matrix = robot_node.getOrientation()
+		R_body = np.array(orientation_matrix).reshape(3, 3)
+		
+		# Camera gimbal rotation
+		R_cam_yaw = np.array([
+			[np.cos(cam_yaw_offset), -np.sin(cam_yaw_offset), 0],
+			[np.sin(cam_yaw_offset), np.cos(cam_yaw_offset), 0],
+			[0, 0, 1]
+		])
+
+		R_cam_pitch = np.array([
+			[np.cos(cam_pitch_offset), 0, np.sin(cam_pitch_offset)],
+			[0, 1, 0],
+			[-np.sin(cam_pitch_offset), 0, np.cos(cam_pitch_offset)]
+		])
+
+		R_cam = R_cam_yaw @ R_cam_pitch
+
+		# Combined rotation: body rotation followed by camera gimbal
+		R = R_body @ R_cam
+		t = pos.reshape(3, 1)
+
+		# Transform to camera coordinates
+		t = -R.T @ t
+		R = R.T
+
+		return R, t
+
 	def project_3d_to_2d(self, point_3d, R, t):
 		"""
 		Project a 3D point to 2D camera coordinates.
@@ -305,6 +351,44 @@ class ObjectDetector:
 			List of detection dictionaries
 		"""
 		R, t = self.get_camera_transform(imu, gps, cam_pitch_offset, cam_yaw_offset)
+
+		spheres = self.find_spheres()
+
+		detections = []
+		for sphere in spheres:
+			if filter_color and sphere['color_type'] != filter_color:
+				continue
+
+			bbox = self.calculate_bbox_from_sphere(sphere['position'], sphere['radius'], R, t)
+
+			if bbox is not None:
+				detections.append({
+					'name': sphere['name'],
+					'type': f"{sphere['color_type']}_sphere",
+					'bbox': bbox,
+					'position_3d': tuple(sphere['position']),
+					'color': sphere['color'],
+					'radius': sphere['radius']
+				})
+				print(detections[-1])
+
+		return detections
+
+	def detect_visible_spheres_from_node(self, robot_node, cam_pitch_offset=0.0, cam_yaw_offset=0.0,
+										 filter_color=None):
+		"""
+		Detect all visible spheres using direct robot node transform (no sensor lag).
+
+		Args:
+			robot_node: Webots robot node
+			cam_pitch_offset: Camera pitch offset
+			cam_yaw_offset: Camera yaw offset
+			filter_color: Only detect spheres of this color (e.g., "red")
+
+		Returns:
+			List of detection dictionaries
+		"""
+		R, t = self.get_camera_transform_from_node(robot_node, cam_pitch_offset, cam_yaw_offset)
 
 		spheres = self.find_spheres()
 
