@@ -28,7 +28,13 @@ class ObjectDetector:
 		self.K = self._get_camera_intrinsic()
 
 	def _get_camera_intrinsic(self):
-		"""Calculate camera intrinsic matrix from FOV."""
+		"""Calculate camera intrinsic matrix from FOV.
+		
+		Webots camera coordinate system:
+		- x = forward (optical axis)
+		- y = right (roll axis)
+		- z = up (pitch axis)
+		"""
 		cx = (self.cam_width - 1) / 2
 		cy = (self.cam_height - 1) / 2
 		fx = self.cam_width / (2 * math.tan(self.hfov / 2))
@@ -102,32 +108,48 @@ class ObjectDetector:
 	def project_3d_to_2d(self, point_3d, R, t):
 		"""
 		Project a 3D point to 2D camera coordinates.
+		
+		Webots camera coordinate system:
+		- x = forward (optical axis, depth)
+		- y = right (horizontal, maps to u)
+		- z = up (vertical, maps to v)
+		
+		Projection: u = fx * y / x + cx, v = fy * z / x + cy
 
 		Args:
-			point_3d: 3D point as (x, y, z)
-			R: Camera rotation matrix
-			t: Camera translation vector
+			point_3d: 3D point as (x, y, z) in world coordinates
+			R: Camera rotation matrix (world to camera)
+			t: Camera translation vector (in camera coordinates)
 
 		Returns:
 			Tuple of (u, v, depth) or None if point is behind camera
 		"""
 		point_3d = np.array(point_3d).reshape(3, 1)
 
-		# Transform to camera coordinates
 		point_cam = (R @ point_3d) + t
 
-		# Check if point is in front of camera
-		if abs(math.atan2(point_cam[1, 0], point_cam[0, 0])) > self.hfov / 2 or abs(
-				math.atan2(point_cam[2, 0], point_cam[0, 0])) > self.vfov / 2:
+		x_cam = point_cam[0, 0]
+		y_cam = point_cam[1, 0]
+		z_cam = point_cam[2, 0]
+
+		if x_cam <= 0 or x_cam > 250:
 			return None
 
-		# Project to image plane
-		point_2d_homogeneous = self.K @ point_cam
-		u = int(point_2d_homogeneous[1, 0] / point_2d_homogeneous[0, 0])
-		v = int(point_2d_homogeneous[2, 0] / point_2d_homogeneous[0, 0])
-		depth = point_cam[0, 0]
+		fx = self.K[0, 0]
+		fy = self.K[1, 1]
+		cx = self.K[0, 2]
+		cy = self.K[1, 2]
 
-		return u, v, depth
+		u = fx * (-y_cam) / x_cam + cx
+		v = fy * (-z_cam) / x_cam + cy
+
+		u = int(round(u))
+		v = int(round(v))
+
+		if not (0 <= u < self.cam_width and 0 <= v < self.cam_height):
+			return None
+
+		return u, v, x_cam
 
 	def is_in_view(self, u, v, margin=0):
 		"""Check if a 2D point is within the camera view."""
@@ -147,38 +169,30 @@ class ObjectDetector:
 		Returns:
 			Tuple of (x, y, width, height) or None if not visible
 		"""
-		# Project sphere center
 		projection = self.project_3d_to_2d(center_3d, R, t)
 		if projection is None:
 			return None
 
 		center_u, center_v, depth = projection
 
-		# Calculate apparent radius in pixels based on depth
-		# Using pinhole camera model: pixel_radius = (focal_length * real_radius) / depth
-		focal_length_h = self.K[0, 0]
-		pixel_width = int((focal_length_h * radius) / depth)
+		fx = self.K[0, 0]
+		fy = self.K[1, 1]
+		
+		pixel_width = int((fx * radius) / depth)
+		pixel_height = int((fy * radius) / depth)
 
-		focal_length_v = self.K[1, 1]
-		pixel_height = int((focal_length_v * radius) / depth)
-
-		# Calculate bounding box
 		x = int(center_u - pixel_width)
 		y = int(center_v - pixel_height)
-		width = 2 * pixel_width
-		height = 2 * pixel_height
+		width = 4 * pixel_width
+		height = 4 * pixel_height
 
-		# Check if at least part of the sphere is visible
 		if (x + width < 0 or x >= self.cam_width or
 				y + height < 0 or y >= self.cam_height):
-			#print('not visible', x, y, self.cam_width, self.cam_height, pixel_width, pixel_height, center_u, center_v, depth)
 			return None
 
-		# Clamp to image boundaries
 		x = max(0, min(x, self.cam_width - 1))
 		y = max(0, min(y, self.cam_height - 1))
 
-		# Adjust width and height if clamped
 		width = min(width, self.cam_width - x)
 		height = min(height, self.cam_height - y)
 
@@ -194,7 +208,6 @@ class ObjectDetector:
 		"""
 		spheres = []
 
-		# Check if supervisor mode is available
 		try:
 			root = self.supervisor.getRoot()
 		except AttributeError:
@@ -220,16 +233,13 @@ class ObjectDetector:
 
 			type_name = node.getTypeName()
 
-			# Check if this is a Solid node (our spawned spheres)
 			if type_name == "Solid":
-				# Try to get translation field
 				translation_field = node.getField("translation")
 				if translation_field is None:
 					continue
 
 				position = translation_field.getSFVec3f()
 
-				# Check if it has a Shape child with Sphere geometry
 				children = node.getField("children")
 				if children is None:
 					continue
@@ -241,18 +251,15 @@ class ObjectDetector:
 				for j in range(children.getCount()):
 					child = children.getMFNode(j)
 					if child and child.getTypeName() == "Shape":
-						# Check geometry
 						geometry_field = child.getField("geometry")
 						if geometry_field:
 							geometry = geometry_field.getSFNode()
 							if geometry and geometry.getTypeName() == "Sphere":
 								is_sphere = True
-								# Get radius
 								radius_field = geometry.getField("radius")
 								if radius_field:
 									radius = radius_field.getSFFloat()
 
-						# Check color
 						appearance_field = child.getField("appearance")
 						if appearance_field:
 							appearance = appearance_field.getSFNode()
@@ -262,7 +269,6 @@ class ObjectDetector:
 									color = base_color_field.getSFColor()
 
 				if is_sphere and color is not None:
-					# Determine color type (check if it's red)
 					r, g, b = color
 					color_type = "unknown"
 					if r > 0.8 and g < 0.3 and b < 0.3:
@@ -298,19 +304,15 @@ class ObjectDetector:
 		Returns:
 			List of detection dictionaries
 		"""
-		# Get camera transform
 		R, t = self.get_camera_transform(imu, gps, cam_pitch_offset, cam_yaw_offset)
 
-		# Find all spheres
 		spheres = self.find_spheres()
 
 		detections = []
 		for sphere in spheres:
-			# Filter by color if specified
 			if filter_color and sphere['color_type'] != filter_color:
 				continue
 
-			# Calculate bounding box
 			bbox = self.calculate_bbox_from_sphere(sphere['position'], sphere['radius'], R, t)
 
 			if bbox is not None:

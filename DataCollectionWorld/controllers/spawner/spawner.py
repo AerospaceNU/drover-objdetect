@@ -5,7 +5,7 @@ import math
 supervisor = Supervisor()
 timestep = int(supervisor.getBasicTimeStep())
 
-N_ROCKS = 120
+N_ROCKS = 0
 N_SPHERES = 100
 Z_FIXED = 0.02
 
