@@ -1,4 +1,6 @@
 import cv2 as cv
+import cvcuda
+import cupy
 import numpy as np
 from typing import Tuple
 from droverDetection.sort_manager import SORTTrackManager
@@ -36,7 +38,6 @@ class Detection:
             self.load_threshold()
 
         self.kernel = kernel
-        self.fgbg = cv.createBackgroundSubtractorMOG2()
         self.sort_manager = SORTTrackManager()
 
     def save_threshold(self):
@@ -78,7 +79,7 @@ class Detection:
         self.high_S = data["high_S"]
         self.high_V = data["high_V"]
 
-    def filter_hsv(self, frame, avg=None):
+    def filter_hsv(self, frame, stream, avg=None):
         """
         Filters the frame based on HSV color space.
 
@@ -89,24 +90,21 @@ class Detection:
         Returns:
             A tuple containing the filtered frame and the average HSV values.
         """
-        frame_HSV = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+        frame_HSV = cvcuda.cvtcolor(frame, cvcuda.ColorConversion.BGR2HSV, stream)
+        frame_HSV_cupy = cupy.asarray(frame_HSV)
         if avg is None:
-            avg = cv.mean(frame_HSV)
-        color_filter = cv.bitwise_not(
-            cv.inRange(
-                frame_HSV,
-                (max(avg[0] - self.low_H, 0), max(avg[1] - self.low_S, 0), 0),
-                (min(avg[0] + self.high_H, 180), min(avg[1] + self.high_S, 255), 255),
-            )
-        )
-        value_filter = cv.inRange(
-            frame_HSV,
-            (0, 0, max(avg[2] - self.low_V, 0)),
-            (180, 255, min(avg[2] + self.high_V, 255)),
-        )
-        return cv.bitwise_and(color_filter, value_filter), avg
+            avg = frame_HSV_cupy.mean()
+        color_lower = cupy.array((max(avg[0] - self.low_H, 0), max(avg[1] - self.low_S, 0), 0)).reshape(1, -1, 1, 1)
+        color_upper = cupy.array((min(avg[0] + self.high_H, 180), min(avg[1] + self.high_S, 255), 255)).reshape(1, -1, 1, 1)
+        color_filter = (frame_HSV_cupy >= color_lower) & (frame_HSV_cupy <= color_upper)
 
-    def detect(self, frame: np.ndarray, frame_idx: int):
+        value_lower = cupy.array((0, 0, max(avg[2] - self.low_V, 0))).reshape(1, -1, 1, 1)
+        value_upper = cupy.array((180, 255, min(avg[2] + self.high_V, 255))).reshape(1, -1, 1, 1)
+        value_filter = (frame_HSV_cupy >= value_lower) & (frame_HSV_cupy <= value_upper)
+
+        return cvcuda.as_tensor(color_filter & value_filter), avg
+
+    def detect(self, frame: cvcuda.Tensor, stream, frame_idx: int):
         """
         Performs object detection on a given frame using SORT tracking.
 
@@ -117,20 +115,18 @@ class Detection:
         Returns:
             A tuple containing the annotated frame and the foreground mask.
         """
-        frame_blurred = cv.GaussianBlur(frame, self.kernel, 0)
-        fgmask = self.fgbg.apply(frame_blurred)
+        frame_blurred = cvcuda.gaussian(frame, self.kernel, (0, 0), stream=stream)
+        components, component_count, components_stats = cvcuda.label(frame_blurred, stats=True, count=True, stream=stream)
+        fgmask = cupy.asarray(components)
         frame_copy = frame.copy()
         fgmask_copy = fgmask.copy()
 
-        frame_threshold, mean = self.filter_hsv(frame_blurred)
-        contours, h = cv.findContours(
-            fgmask_copy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE
-        )
+        frame_threshold, mean = self.filter_hsv(frame_blurred, stream)
 
         detections = []
 
-        for contour in contours:
-            x, y, width, height = cv.boundingRect(contour)
+        for component_stats in components_stats:
+            x, y, width, height = component_stats[1:5]
             if width * height < 200:
                 fgmask_copy[y : y + height, x : x + width] = 0
                 continue
@@ -145,9 +141,7 @@ class Detection:
                 fgmask_copy[y : y + height, x : x + width] = 0
                 continue
 
-            fgmask_copy[y : y + height, x : x + width] = cv.bitwise_and(
-                fgmask[y : y + height, x : x + width], filtered
-            )
+            fgmask_copy[y : y + height, x : x + width] = fgmask[y : y + height, x : x + width] & filtered
 
             x1, y1, x2, y2 = x, y, x + width, y + height
 

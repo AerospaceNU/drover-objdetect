@@ -1,5 +1,6 @@
 import cv2 as cv
 import numpy as np
+import PyNvVideoCodec as nvc
 from typing import Union
 
 
@@ -22,7 +23,15 @@ class VideoFeed:
             if not self.feed.isOpened():
                 raise RuntimeError(f"Could not open camera device {source}")
         elif isinstance(source, str):
-            self.feed = cv.VideoCapture(source)
+            self.feed = nvc.SimpleDecoder(
+                str(source),
+                gpu_id=0,
+                output_color_type=nvc.OutputColorType.BGR,
+                need_scanned_stream_metadata=False,
+                max_width=1920,
+                max_height=1080,
+                use_device_memory=True,
+            )
             if not self.feed.isOpened():
                 raise FileNotFoundError(f"Could not open designated mp4")
         else:
