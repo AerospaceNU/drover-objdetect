@@ -1,0 +1,291 @@
+"""Object detection and 3D-to-2D projection module for Webots."""
+import functools
+
+import numpy as np
+import math
+from typing import List, Tuple, Optional, Dict
+
+from .drone import Drone
+from droverDetection.detection import Detection
+
+
+class Locator:
+	def __init__(self, drone, camera):
+		"""
+		Initialize the object detector.
+
+		Args:
+			camera: Webots camera device
+		"""
+		self.camera = camera
+		self.cam_width = camera.getWidth()
+		self.cam_height = camera.getHeight()
+		self.fov = camera.getFOV()
+		self.hfov = self.fov
+		self.vfov = 2 * math.atan(self.cam_height / self.cam_width * math.tan(self.fov / 2))
+
+		# Calculate camera intrinsic matrix
+		self.K = self._get_camera_intrinsic()
+
+		self.drone: Drone = drone
+		self.detection: Detection = Detection()
+
+	def _get_camera_intrinsic(self):
+		"""Calculate camera intrinsic matrix from FOV.
+
+		Webots camera coordinate system:
+		- x = forward (optical axis)
+		- y = right (roll axis)
+		- z = up (pitch axis)
+		"""
+		cx = (self.cam_width - 1) / 2
+		cy = (self.cam_height - 1) / 2
+		fx = self.cam_width / (2 * math.tan(self.hfov / 2))
+		fy = self.cam_height / (2 * math.tan(self.vfov / 2))
+		return np.array([
+			[fx, 0, cx],
+			[0, fy, cy],
+			[0, 0, 1]
+		], dtype=np.float32)
+
+	def get_camera_transform(self):
+		"""
+		Get the camera transformation matrix (rotation and translation).
+
+		Returns:
+			Tuple of (R, t) where R is rotation matrix and t is translation vector
+		"""
+		# Get drone pose
+		pos = np.array(self.drone.getValues())
+		roll, pitch, yaw = self.drone.getRollPitchYaw()
+		_, cam_pitch_offset, cam_yaw_offset = self.drone.getGimbalRollPitchYaw()
+
+		# Camera gimbal rotation
+		R_cam_yaw = np.array([
+			[np.cos(cam_yaw_offset), -np.sin(cam_yaw_offset), 0],
+			[np.sin(cam_yaw_offset), np.cos(cam_yaw_offset), 0],
+			[0, 0, 1]
+		])
+
+		R_cam_pitch = np.array([
+			[np.cos(cam_pitch_offset), 0, np.sin(cam_pitch_offset)],
+			[0, 1, 0],
+			[-np.sin(cam_pitch_offset), 0, np.cos(cam_pitch_offset)]
+		])
+
+		R_cam = R_cam_yaw @ R_cam_pitch
+
+		# Drone body rotation
+		Rz = np.array([
+			[np.cos(yaw), -np.sin(yaw), 0],
+			[np.sin(yaw), np.cos(yaw), 0],
+			[0, 0, 1]
+		])
+		Ry = np.array([
+			[np.cos(pitch), 0, np.sin(pitch)],
+			[0, 1, 0],
+			[-np.sin(pitch), 0, np.cos(pitch)]
+		])
+		Rx = np.array([
+			[1, 0, 0],
+			[0, np.cos(roll), -np.sin(roll)],
+			[0, np.sin(roll), np.cos(roll)]
+		])
+
+		# Combined rotation
+		R = Rz @ Ry @ Rx #@ R_cam
+		t = pos.reshape(3, 1)
+
+		# Transform to camera coordinates
+		t = -R.T @ t
+		R = R.T
+
+		return R, t
+
+	def project_3d_to_2d(self, point_3d, R, t):
+		"""
+		Project a 3D point to 2D camera coordinates.
+
+		Webots camera coordinate system:
+		- x = forward (optical axis, depth)
+		- y = right (horizontal, maps to u)
+		- z = up (vertical, maps to v)
+
+		Projection: u = fx * y / x + cx, v = fy * z / x + cy
+
+		Args:
+			point_3d: 3D point as (x, y, z) in world coordinates
+			R: Camera rotation matrix (world to camera)
+			t: Camera translation vector (in camera coordinates)
+
+		Returns:
+			Tuple of (u, v, depth) or None if point is behind camera
+		"""
+		point_3d = np.array(point_3d).reshape(3, 1)
+
+		point_cam = (R @ point_3d) + t
+
+		x_cam = point_cam[0, 0]
+		y_cam = point_cam[1, 0]
+		z_cam = point_cam[2, 0]
+
+		if x_cam <= 0 or x_cam > 250:
+			return None
+
+		fx = self.K[0, 0]
+		fy = self.K[1, 1]
+		cx = self.K[0, 2]
+		cy = self.K[1, 2]
+
+		u = fx * (-y_cam) / x_cam + cx
+		v = fy * (-z_cam) / x_cam + cy
+
+		u = int(round(u))
+		v = int(round(v))
+
+		if not (0 <= u < self.cam_width and 0 <= v < self.cam_height):
+			return None
+
+		return u, v, x_cam
+
+	def is_in_view(self, u, v, margin=0):
+		"""Check if a 2D point is within the camera view."""
+		return (margin <= u < self.cam_width - margin and
+				margin <= v < self.cam_height - margin)
+
+	def calculate_bbox_from_sphere(self, center_3d, radius, R, t):
+		"""
+		Calculate 2D bounding box for a sphere.
+
+		Args:
+			center_3d: 3D center position of sphere
+			radius: Sphere radius
+			R: Camera rotation matrix
+			t: Camera translation vector
+
+		Returns:
+			Tuple of (x, y, width, height) or None if not visible
+		"""
+		projection = self.project_3d_to_2d(center_3d, R, t)
+		if projection is None:
+			return None
+
+		center_u, center_v, depth = projection
+
+		fx = self.K[0, 0]
+		fy = self.K[1, 1]
+
+		pixel_width = int((fx * radius) / depth)
+		pixel_height = int((fy * radius) / depth)
+
+		x = int(center_u - pixel_width)
+		y = int(center_v - pixel_height)
+		width = 4 * pixel_width
+		height = 4 * pixel_height
+
+		if (x + width < 0 or x >= self.cam_width or
+				y + height < 0 or y >= self.cam_height):
+			return None
+
+		x = max(0, min(x, self.cam_width - 1))
+		y = max(0, min(y, self.cam_height - 1))
+
+		width = min(width, self.cam_width - x)
+		height = min(height, self.cam_height - y)
+
+		return (x, y, width, height)
+
+	def detect_visible_spheres(self, imu, gps, cam_pitch_offset=0.0, cam_yaw_offset=0.0,
+							   filter_color=None):
+		"""
+		Detect all visible spheres in the current camera view.
+
+		Args:
+			imu: IMU device
+			gps: GPS device
+			cam_pitch_offset: Camera pitch offset
+			cam_yaw_offset: Camera yaw offset
+			filter_color: Only detect spheres of this color (e.g., "red")
+
+		Returns:
+			List of detection dictionaries
+		"""
+		R, t = self.get_camera_transform(imu, gps, cam_pitch_offset, cam_yaw_offset)
+
+		spheres = self.find_spheres()
+
+		detections = []
+		for sphere in spheres:
+			if filter_color and sphere['color_type'] != filter_color:
+				continue
+
+			bbox = self.calculate_bbox_from_sphere(sphere['position'], sphere['radius'], R, t)
+
+			if bbox is not None:
+				detections.append({
+					'name': sphere['name'],
+					'type': f"{sphere['color_type']}_sphere",
+					'bbox': bbox,
+					'position_3d': tuple(sphere['position']),
+					'color': sphere['color'],
+					'radius': sphere['radius']
+				})
+				print(detections[-1])
+
+		return detections
+
+	def project_2d_to_3d(self, u, v, alt, R, t):
+		"""
+		Back-project a 2D pixel coordinate to 3D world coordinates using known alt.
+
+		Uses the same Webots camera convention as project_3d_to_2d:
+		  Camera frame: x = forward (optical axis), y = right, z = up
+		  Projection:   u = fx * (-y_cam) / x_cam + cx
+						v = fy * (-z_cam) / x_cam + cy
+
+		Args:
+			u: Pixel x-coordinate
+			v: Pixel y-coordinate
+			alt: Known depth along the camera's optical axis (x_cam)
+			R: Camera rotation matrix  (world-to-camera, from get_camera_transform)
+			t: Camera translation vector (in camera coords, from get_camera_transform)
+
+		Returns:
+			numpy array of shape (3,) with world coordinates (x, y, z)
+		"""
+		fx = self.K[0, 0]
+		fy = self.K[1, 1]
+		cx = self.K[0, 2]
+		cy = self.K[1, 2]
+
+		# Invert the projection into camera-space coordinates.
+		#   u = fx * (-y_cam) / x_cam + cx  =>  y_cam = -(u - cx) * x_cam / fx
+		#   v = fy * (-z_cam) / x_cam + cy  =>  z_cam = -(v - cy) * x_cam / fy
+		# Note: y is left in Webots, the negation in the forward model accounts for that.
+		# For z (up), the negation flips to screen-down. Both inversions keep the same sign.
+		x_cam = alt
+		y_cam = (u - cx) * alt / fx
+		z_cam = -(v - cy) * alt / fy
+
+		point_cam = np.array([x_cam, y_cam, z_cam])
+
+		# Invert the camera transform.
+		# get_camera_transform gives: point_cam = R @ point_world + t
+		# So: point_world = R^T @ (point_cam - t)
+		point_world = R.T @ (point_cam - t.flatten())
+
+		return point_world
+
+	def point_cam_to_LLA(self, x, y):
+		lat, lon, alt = self.drone.getLLA()
+		print(lat, lon, alt)
+		_, _, yaw = self.drone.getRollPitchYaw()
+		R, t = self.get_camera_transform()
+		point_world = self.project_2d_to_3d(x, y, alt, R, t)
+		point_world = point_world @ np.array([[math.cos(yaw), -math.sin(yaw), 0],
+								 [math.sin(yaw), math.cos(yaw), 0],
+								 [0, 0, 1]])
+		point_world[0] /= 111320 * math.cos(lat)
+		point_world[1] /= 111320
+		point_world[2] = 0
+		return point_world

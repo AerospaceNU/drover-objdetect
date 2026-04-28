@@ -51,9 +51,9 @@ class VideoFeed:
                 return None
         return self.last_frame
 
-    def toggle_pause(self):
+    def set_playback_state(self, pause: bool):
         """Toggles the pause state of the video feed."""
-        self.stop_reading = not self.stop_reading
+        self.stop_reading = pause
 
     def release(self):
         """Releases the video capture object."""
